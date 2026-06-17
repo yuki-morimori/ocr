@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from engine import core, forms, invoice, learning, registry, report, review_sheet
+from engine import core, forms, invoice, learning, payroll, registry, report, review_sheet
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -71,14 +71,18 @@ async def read(request: Request, industry: str = Form(...), image: UploadFile = 
     finally:
         os.unlink(tmp_path)
 
-    # 1枚から請求書プレビュー（その伝票の請求先・月で集計）。billing がある業種のみ。
+    # 1枚からプレビュー（その伝票の請求先・月で集計）。設定がある業種のみ。
+    month = (data.get("date") or "")[:7]
     invoice_html = ""
-    invoice_month = ""
     if "billing" in cfg:
-        invoice_month = (data.get("date") or "")[:7]
-        invs = invoice.build_invoices(cfg, [data], month=invoice_month or None)
+        invs = invoice.build_invoices(cfg, [data], month=month or None)
         if invs:
             invoice_html = invoice.render_html(cfg, invs[0])
+    payroll_html = ""
+    if "payroll" in cfg:
+        pays = payroll.build(cfg, [data], month=month or None)
+        if pays:
+            payroll_html = payroll.render_html(cfg, pays[0])
 
     return templates.TemplateResponse(
         request,
@@ -88,7 +92,8 @@ async def read(request: Request, industry: str = Form(...), image: UploadFile = 
             "data": data,
             "form_html": form_html,
             "invoice_html": invoice_html,
-            "invoice_month": invoice_month,
+            "payroll_html": payroll_html,
+            "invoice_month": month,
             "json_text": _pretty(data),
             "live": core.available(),
             "filename": image.filename,
@@ -126,6 +131,24 @@ def make_invoice(industry: str = Form(...), payload: str = Form(...), month: str
         content=bio.getvalue(),
         media_type=_XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="invoice_{cfg["id"]}.xlsx"'},
+    )
+
+
+@app.post("/payroll")
+def make_payroll(industry: str = Form(...), payload: str = Form(...), month: str = Form("")):
+    """確定データから給与素データ(.xlsx)を生成（対象者ごと）。"""
+    cfg = registry.get(industry)
+    if "payroll" not in cfg:
+        return Response("この業種には給与設定がありません。", status_code=400)
+    data = json.loads(payload)
+    results = data if isinstance(data, list) else [data]
+    pays = payroll.build(cfg, results, month=month or None)
+    bio = io.BytesIO()
+    payroll.build_xlsx(cfg, pays, bio)
+    return Response(
+        content=bio.getvalue(),
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="payroll_{cfg["id"]}.xlsx"'},
     )
 
 

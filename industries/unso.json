@@ -20,7 +20,9 @@
     {"key": "client", "label": "取引先 / 荷主", "type": "text", "desc": "運賃の請求先。記載が無ければ null。"},
     {"key": "start_odo", "label": "出庫メーター(km)", "type": "number", "critical": true, "desc": "出発時の走行距離計。数値のみ。"},
     {"key": "end_odo", "label": "帰庫メーター(km)", "type": "number", "critical": true, "desc": "帰着時の走行距離計。数値のみ。"},
-    {"key": "total_distance", "label": "走行距離(km)", "type": "number", "critical": true, "desc": "当日走行距離。記載があればそのまま。無く両メーターがあれば差で算出可。"}
+    {"key": "total_distance", "label": "走行距離(km)", "type": "number", "critical": true, "desc": "当日走行距離。記載があればそのまま。無く両メーターがあれば差で算出可。"},
+    {"key": "fuel_liters", "label": "給油量(L)", "type": "number", "desc": "当日の給油量(L)。給油欄や給油レシートから。無ければ null。"},
+    {"key": "fuel_amount", "label": "燃料費(円)", "type": "number", "critical": true, "desc": "当日の燃料費(円)。給油レシートの税込金額。無ければ null。"}
   ],
   "line_items": {
     "key": "trips",
@@ -68,9 +70,24 @@
     ],
     "measures": [
       {"key": "expense_amount", "label": "立替経費", "unit": "円", "source": "line", "agg": "sum"},
+      {"key": "fuel_amount", "label": "燃料費", "unit": "円", "source": "header", "agg": "sum"},
+      {"key": "total_cost", "label": "車両コスト計", "unit": "円", "derived": {"op": "sum", "of": ["expense_amount", "fuel_amount"]}},
       {"key": "total_distance", "label": "走行距離", "unit": "km", "source": "header", "agg": "sum"},
+      {"key": "fuel_liters", "label": "給油量", "unit": "L", "source": "header", "agg": "sum"},
+      {"key": "fuel_efficiency", "label": "燃費", "unit": "km/L", "derived": {"op": "ratio", "num": "total_distance", "den": "fuel_liters", "round": 1}},
       {"key": "_count", "label": "運行数", "agg": "count"}
     ]
+  },
+  "payroll": {
+    "party_field": "driver",
+    "party_label": "乗務員",
+    "currency": "円",
+    "items": [
+      {"label": "運行手当（運行数×日当）", "qty_field": "_count", "qty_label": "運行数", "unit": "回", "rate": 12000},
+      {"label": "距離手当（走行km×単価）", "qty_field": "total_distance", "qty_label": "走行距離", "unit": "km", "rate": 15}
+    ],
+    "reimburse": {"label": "立替精算（実費・給与とは別）", "field": "expense_amount", "source": "line"},
+    "note": "日当・距離単価はサンプル。実運用は雇用条件マスタに差し替え。立替は給与と別に実費精算。"
   },
   "mock": {
     "low_first_pass": ["expense_amount"],
@@ -81,6 +98,8 @@
     "start_odo": 84210,
     "end_odo": 84612,
     "total_distance": 402,
+    "fuel_liters": 95,
+    "fuel_amount": 16150,
     "trips": [
       {"from_place": "千葉物流センター", "to_place": "大宮DC", "cargo": "雑貨パレット", "charter": "自社", "expense_type": "高速", "expense_amount": 3620},
       {"from_place": "大宮DC", "to_place": "柏営業所", "cargo": "空車", "charter": "自社", "expense_type": "駐車", "expense_amount": 600}

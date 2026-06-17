@@ -55,6 +55,14 @@
     <button class="dl" type="submit">🧾 請求書(.xlsx)を出力</button>
   </form>
   {% endif %}
+  {% if cfg.payroll %}
+  <form action="/payroll" method="post">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <input type="hidden" name="payload" value="{{ json_text|e }}">
+    <input type="hidden" name="month" value="{{ invoice_month }}">
+    <button class="dl" type="submit">👷 給与素データ(.xlsx)</button>
+  </form>
+  {% endif %}
   {% if cfg.analytics %}
   <form action="/report" method="post">
     <input type="hidden" name="industry" value="{{ cfg.id }}">
@@ -82,12 +90,22 @@
   {% endif %}
 </div>
 
-{% if invoice_html %}
-<section class="col" style="margin:6px 0 4px">
-  <h2>請求書プレビュー（この1枚／{{ invoice_month or '全期間' }}）</h2>
-  {{ invoice_html|safe }}
-  <p class="form-note">※ 月末は確認シートで確定した複数伝票をまとめて請求先ごとに集計します。</p>
-</section>
+{% if invoice_html or payroll_html %}
+<div class="cols" style="margin:6px 0 4px">
+  {% if invoice_html %}
+  <section class="col">
+    <h2>請求書プレビュー（この1枚／{{ invoice_month or '全期間' }}）</h2>
+    {{ invoice_html|safe }}
+  </section>
+  {% endif %}
+  {% if payroll_html %}
+  <section class="col">
+    <h2>給与素データ プレビュー（同じ日報から）</h2>
+    {{ payroll_html|safe }}
+  </section>
+  {% endif %}
+</div>
+<p class="form-note">※ 月末は確認シートで確定した複数伝票をまとめて集計します。同じ日報から運賃請求と給与の両方が出ます。</p>
 {% endif %}
 
 <div class="cols">

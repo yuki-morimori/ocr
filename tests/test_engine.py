@@ -9,7 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine import core, forms, invoice, learning, registry, report, review_sheet  # noqa: E402
+from engine import (core, forms, invoice, learning, payroll,  # noqa: E402
+                    registry, report, review_sheet)
 
 from openpyxl import load_workbook  # noqa: E402
 
@@ -325,10 +326,84 @@ def test_report_xlsx_has_sheet_per_dimension_plus_cross(tmp_path):
     report.build_xlsx(cfg, rep, p)
     from openpyxl import load_workbook
     names = load_workbook(p).sheetnames
-    # 3軸 + クロス1
-    assert len(names) == len(rep["dimensions"]) + 1
+    # 軸ごと + クロス1 + 月推移1
+    assert len(names) == len(rep["dimensions"]) + 2
+    assert "月推移" in names
 
 
-def test_both_industries_have_analytics():
+def test_all_industries_have_analytics():
     for it in registry.list_industries():
         assert "analytics" in registry.get(it["id"])
+
+
+# ── #4 3つ目の業種（農業出荷）が設定追加だけで全機能に乗る ─────────────────────
+def test_third_industry_nogyo_registered_and_full_pipeline():
+    ids = {it["id"] for it in registry.list_industries()}
+    assert "nogyo" in ids
+    cfg = registry.get("nogyo")
+    # 読み取り（モック）→ 帳票・確認シート・請求・集計まで一通り動く
+    data = core.extract("a.jpg", cfg)
+    assert data["ship_to"] and data["items"]
+    assert forms.render_form(cfg, data)
+    inv = invoice.build_invoices(cfg, [data], month="2026-06")[0]
+    # 等級別単価（秀>優>良）で集計されている
+    amt = {l["desc"]: l["amount"] for l in inv["lines"]}
+    assert amt["トマト（秀）"] == 30000 and amt["トマト（優）"] == 42000
+    assert inv["tax"] == round(inv["subtotal"] * 0.08)   # 軽減税率8%
+    rep = report.aggregate(cfg, [data])
+    assert any(d["label"] == "出荷先" for d in rep["dimensions"])
+
+
+# ── #2 車両コストを深く（燃料・総コスト・燃費・月推移）──────────────────────────
+def test_report_derived_total_cost_and_fuel_efficiency():
+    cfg = registry.get("unso")
+    N = core._normalize
+    slips = [N(cfg, {"date": "2026-06-01", "vehicle_no": "車1", "client": "A", "total_distance": 400,
+                     "fuel_liters": 100, "fuel_amount": 16000, "trips": [{"expense_amount": 2000}]})]
+    rep = report.aggregate(cfg, slips)
+    veh = next(d for d in rep["dimensions"] if d["label"] == "車番")["rows"][0]["measures"]
+    assert veh["total_cost"] == 18000          # 立替2000 + 燃料16000（派生 sum）
+    assert veh["fuel_efficiency"] == 4.0       # 400km / 100L（派生 ratio）
+
+
+def test_report_monthly_trend():
+    cfg = registry.get("unso")
+    N = core._normalize
+    slips = [
+        N(cfg, {"date": "2026-06-10", "vehicle_no": "車1", "client": "A", "fuel_amount": 1000, "trips": []}),
+        N(cfg, {"date": "2026-07-10", "vehicle_no": "車1", "client": "A", "fuel_amount": 2000, "trips": []}),
+    ]
+    rep = report.aggregate(cfg, slips)
+    months = [t["month"] for t in rep["trend"]]
+    assert months == ["2026-06", "2026-07"]    # 昇順の月推移
+    assert rep["trend"][1]["measures"]["fuel_amount"] == 2000
+
+
+# ── #3 ドライバー給与の素データ ───────────────────────────────────────────────
+def test_payroll_from_same_daily_report():
+    cfg = registry.get("unso")
+    assert "payroll" in cfg
+    N = core._normalize
+    slips = [
+        N(cfg, {"date": "2026-06-01", "driver": "濱崎", "total_distance": 400, "trips": [{"expense_amount": 1000}]}),
+        N(cfg, {"date": "2026-06-02", "driver": "濱崎", "total_distance": 100, "trips": [{"expense_amount": 500}]}),
+        N(cfg, {"date": "2026-06-03", "driver": "田中", "total_distance": 200, "trips": [{"expense_amount": 300}]}),
+    ]
+    pays = {p["party"]: p for p in payroll.build(cfg, slips, month="2026-06")}
+    h = pays["濱崎"]
+    # 運行手当 2回×12000 + 距離手当 500km×15 = 24000 + 7500
+    assert h["lines"][0]["amount"] == 24000
+    assert h["lines"][1]["amount"] == 7500
+    assert h["allowance_total"] == 31500
+    assert h["reimburse"] == 1500              # 立替は実費精算（手当と別建て）
+    assert h["total"] == 33000                 # 手当＋立替精算
+
+
+def test_payroll_xlsx_sheet_per_driver(tmp_path):
+    cfg = registry.get("unso")
+    slips = [core.extract("a.jpg", cfg)]
+    pays = payroll.build(cfg, slips)
+    p = tmp_path / "pay.xlsx"
+    payroll.build_xlsx(cfg, pays, p)
+    from openpyxl import load_workbook
+    assert len(load_workbook(p).sheetnames) == len(pays) >= 1

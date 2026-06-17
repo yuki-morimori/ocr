@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from engine import core, forms, invoice, learning, registry, report, review_sheet
+from engine import core, forms, invoice, learning, payroll, registry, report, review_sheet
 
 
 def main() -> None:
@@ -27,7 +27,8 @@ def main() -> None:
     p.add_argument("--form", type=Path, help="先頭伝票の帳票HTML出力先")
     p.add_argument("--invoice", type=Path, help="請求書(.xlsx)の出力先（請求先ごとに集計）")
     p.add_argument("--report", type=Path, help="集計レポート(.xlsx)の出力先（会社別・車番別 等）")
-    p.add_argument("--month", help="対象月 YYYY-MM（請求書・集計の絞り込み。省略時は全期間）")
+    p.add_argument("--payroll", type=Path, help="給与素データ(.xlsx)の出力先（対象者ごと）")
+    p.add_argument("--month", help="対象月 YYYY-MM（請求書・集計・給与の絞り込み。省略時は全期間）")
     p.add_argument("--learned", action="store_true", help="蓄積された学習内容を表示")
     args = p.parse_args()
 
@@ -89,6 +90,14 @@ def main() -> None:
         report.build_xlsx(cfg, rep, args.report)
         dims = " / ".join(f"{d['label']}{len(d['rows'])}件" for d in rep["dimensions"])
         print(f"集計レポートを保存しました: {args.report}（{dims}）", file=sys.stderr)
+    if args.payroll:
+        if "payroll" not in cfg:
+            raise SystemExit(f"{cfg['display_name']} には payroll 設定がありません。")
+        pays = payroll.build(cfg, results, month=args.month)
+        payroll.build_xlsx(cfg, pays, args.payroll)
+        tot = sum(p["total"] for p in pays)
+        print(f"給与素データを保存しました: {args.payroll}"
+              f"（対象 {len(pays)} 名 / 支給合計 {tot:,}円）", file=sys.stderr)
 
 
 def _print_industries() -> None:

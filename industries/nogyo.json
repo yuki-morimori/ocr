@@ -1,0 +1,76 @@
+{
+  "id": "nogyo",
+  "display_name": "農業（出荷）",
+  "doc_label": "出荷伝票 / 出荷予冷票",
+  "context_declaration": "これは農産物の『出荷伝票』です。生産者が市場・JA・直売所などへ出荷した青果の記録で、品目・等級・規格・数量が手書きされていることが多いです。",
+  "glossary": [
+    {"term": "出荷先", "note": "市場・JA・量販店・直売所など。請求/精算先になる。"},
+    {"term": "等級", "note": "品質のランク。秀 > 優 > 良 の順。単価が変わる。略記『秀』『ゆう』等。"},
+    {"term": "規格", "note": "サイズ階級（2L/L/M/S/2S など）や入数。"},
+    {"term": "ケース", "note": "出荷の荷姿単位（箱）。『C』『箱』とも。数量はケース数が基本。"},
+    {"term": "部会", "note": "JAの作物別生産者グループ。生産者名の代わりに部会名のことがある。"},
+    {"term": "荷口 / ロット", "note": "出荷のまとまり番号。"}
+  ],
+  "header_fields": [
+    {"key": "date", "label": "出荷日", "type": "date", "desc": "出荷した日。和暦(R=令和)は西暦YYYY-MM-DDへ。"},
+    {"key": "ship_to", "label": "出荷先", "type": "text", "desc": "市場/JA/量販店/直売所などの出荷先名（精算先）。"},
+    {"key": "producer", "label": "生産者 / 部会", "type": "text", "desc": "生産者氏名または部会名。手書きそのまま。"},
+    {"key": "lot_no", "label": "荷口番号", "type": "text", "desc": "ロット/荷口番号。読めた英数字をそのまま。"}
+  ],
+  "line_items": {
+    "key": "items",
+    "label": "出荷明細",
+    "row_hint": "1品目×等級×規格＝1行。同じ品目でも等級/規格が違えば行を分ける。",
+    "columns": [
+      {"key": "item", "label": "品目", "type": "text", "desc": "野菜・果物名（例 トマト/きゅうり/いちご）。"},
+      {"key": "grade", "label": "等級", "type": "text", "desc": "秀/優/良 など。判別できなければ null（推測しない）。"},
+      {"key": "size", "label": "規格", "type": "text", "desc": "サイズ階級（2L/L/M/S 等）。無ければ null。"},
+      {"key": "qty", "label": "数量(ケース)", "type": "number", "sum": true, "critical": true, "desc": "ケース数（箱数）。数値のみ。"}
+    ]
+  },
+  "suppression_rules": [
+    "数量・単価は読めたものだけ入れる。かすれ・読めない箇所は推測せず null。",
+    "等級（秀/優/良）は明記がある時だけ。曖昧なら null（単価区分に直結するため保守的に）。",
+    "品目名は手書きそのまま。略称・方言名でも前後から推定しつつ、不確かなら confidence に low。"
+  ],
+  "form": {
+    "title": "出荷明細・精算 素データ",
+    "subtitle": "（出荷先ごとに月末集計 → 出荷請求/精算へ。等級で単価区分）",
+    "summary_note": "ケース数の合計が精算の基礎。等級が上がるほど高単価。"
+  },
+  "billing": {
+    "party_field": "ship_to",
+    "party_label": "出荷先",
+    "mode": "weight",
+    "qty_field": "qty",
+    "item_field": "item",
+    "group_field": "grade",
+    "unit": "ケース",
+    "currency": "円",
+    "tax_rate": 0.08,
+    "unit_prices": {"秀": 1500, "優": 1200, "良": 900, "_default": 1000},
+    "note": "単価（円/ケース）と税率8%（軽減税率）はサンプル。実運用は市場/JAの建値・出荷先マスタに差し替え。"
+  },
+  "analytics": {
+    "dimensions": [
+      {"key": "ship_to", "label": "出荷先"},
+      {"key": "producer", "label": "生産者/部会"}
+    ],
+    "measures": [
+      {"key": "qty", "label": "出荷ケース", "unit": "ケース", "source": "line", "agg": "sum"},
+      {"key": "_count", "label": "出荷回数", "agg": "count"}
+    ]
+  },
+  "mock": {
+    "date": "2026-06-15",
+    "ship_to": "JA成田 青果市場",
+    "producer": "トマト部会 山本",
+    "lot_no": "T-0615-12",
+    "items": [
+      {"item": "トマト", "grade": "秀", "size": "L", "qty": 20},
+      {"item": "トマト", "grade": "優", "size": "M", "qty": 35},
+      {"item": "きゅうり", "grade": "良", "size": "2L", "qty": 12}
+    ],
+    "unreadable_fields": []
+  }
+}
