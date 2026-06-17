@@ -108,5 +108,8 @@ table.lines td.num{text-align:right;font-variant-numeric:tabular-nums}
 .sumrow td{background:#f1f6ff;font-weight:700;border-top:2px solid var(--brand)}
 .sumrow .total-label{text-align:right}
 .sumrow .total{color:var(--brand-d)}
+.sumrow.grand td{background:#1f2a3a;color:#fff}
+.sumrow.grand .total{color:#fff;font-size:1.05rem}
+.invoice .charter-h{font-size:.95rem;margin:14px 0 6px;color:var(--muted)}
 .empty{color:#b6bfca}
 .form-note{color:var(--muted);font-size:.8rem;margin-top:12px}

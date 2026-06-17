@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from engine import core, forms, learning, registry, review_sheet
+from engine import core, forms, invoice, learning, registry, review_sheet
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -71,6 +71,15 @@ async def read(request: Request, industry: str = Form(...), image: UploadFile = 
     finally:
         os.unlink(tmp_path)
 
+    # 1枚から請求書プレビュー（その伝票の請求先・月で集計）。billing がある業種のみ。
+    invoice_html = ""
+    invoice_month = ""
+    if "billing" in cfg:
+        invoice_month = (data.get("date") or "")[:7]
+        invs = invoice.build_invoices(cfg, [data], month=invoice_month or None)
+        if invs:
+            invoice_html = invoice.render_html(cfg, invs[0])
+
     return templates.TemplateResponse(
         request,
         "result.html",
@@ -78,6 +87,8 @@ async def read(request: Request, industry: str = Form(...), image: UploadFile = 
             "cfg": cfg,
             "data": data,
             "form_html": form_html,
+            "invoice_html": invoice_html,
+            "invoice_month": invoice_month,
             "json_text": _pretty(data),
             "live": core.available(),
             "filename": image.filename,
@@ -97,6 +108,24 @@ def review(industry: str = Form(...), payload: str = Form(...)):
         content=bio.getvalue(),
         media_type=_XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="review_{cfg["id"]}.xlsx"'},
+    )
+
+
+@app.post("/invoice")
+def make_invoice(industry: str = Form(...), payload: str = Form(...), month: str = Form("")):
+    """確定データから請求書(.xlsx)を生成（請求先ごとに集計）してダウンロードさせる。"""
+    cfg = registry.get(industry)
+    if "billing" not in cfg:
+        return Response("この業種には請求設定がありません。", status_code=400)
+    data = json.loads(payload)
+    results = data if isinstance(data, list) else [data]
+    invoices = invoice.build_invoices(cfg, results, month=month or None)
+    bio = io.BytesIO()
+    invoice.build_xlsx(cfg, invoices, bio)
+    return Response(
+        content=bio.getvalue(),
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="invoice_{cfg["id"]}.xlsx"'},
     )
 
 

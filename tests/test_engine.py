@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine import core, forms, learning, registry, review_sheet  # noqa: E402
+from engine import core, forms, invoice, learning, registry, review_sheet  # noqa: E402
 
 from openpyxl import load_workbook  # noqa: E402
 
@@ -211,3 +211,68 @@ def test_learning_loop_through_sheet(monkeypatch, tmp_path):
     review_sheet.read(cfg, p, learn=True)
     after = learning.summary(cfg)["corrections"]
     assert after == before + 1
+
+
+def test_invoice_sanpai_weight_pricing():
+    """産廃: 排出事業者ごとに 正味重量×区分単価（混合は高単価）で集計。"""
+    cfg = registry.get("sanpai")
+    slips = [core._normalize(cfg, {
+        "date": "2026-06-10", "emitter": "A社",
+        "items": [{"item": "混合廃棄物", "category": "混合", "net": 1000},
+                  {"item": "がれき類", "category": "単品", "net": 2000}],
+    })]
+    invs = invoice.build_invoices(cfg, slips, month="2026-06")
+    assert len(invs) == 1
+    inv = invs[0]
+    assert inv["party"] == "A社"
+    amounts = {l["desc"]: l["amount"] for l in inv["lines"]}
+    assert amounts["混合廃棄物（混合）"] == 25000   # 1000kg × 25
+    assert amounts["がれき類（単品）"] == 24000     # 2000kg × 12
+    assert inv["subtotal"] == 49000
+    assert inv["tax"] == 4900 and inv["total"] == 53900
+
+
+def test_invoice_groups_by_party_and_month():
+    cfg = registry.get("sanpai")
+    slips = [
+        core._normalize(cfg, {"date": "2026-06-01", "emitter": "A社", "items": [{"category": "混合", "net": 100}]}),
+        core._normalize(cfg, {"date": "2026-06-02", "emitter": "B社", "items": [{"category": "混合", "net": 200}]}),
+        core._normalize(cfg, {"date": "2026-05-30", "emitter": "A社", "items": [{"category": "混合", "net": 999}]}),
+    ]
+    invs = invoice.build_invoices(cfg, slips, month="2026-06")
+    parties = {i["party"]: i for i in invs}
+    assert set(parties) == {"A社", "B社"}                # 5月分は除外
+    assert parties["A社"]["subtotal"] == 2500            # 100kg×25 のみ（5月の999は対象外）
+
+
+def test_invoice_unso_trip_and_charter():
+    """運送: 走行×運賃＋立替。傭車便は別仕分け。"""
+    cfg = registry.get("unso")
+    slips = [
+        core._normalize(cfg, {"date": "2026-06-05", "client": "X物流", "total_distance": 100,
+                              "trips": [{"charter": "自社", "expense_amount": 500}]}),
+        core._normalize(cfg, {"date": "2026-06-06", "client": "X物流", "total_distance": 50,
+                              "trips": [{"charter": "傭車", "expense_amount": 800}]}),
+    ]
+    inv = invoice.build_invoices(cfg, slips, month="2026-06")[0]
+    fare = next(l for l in inv["lines"] if "運賃" in l["desc"])
+    assert fare["amount"] == 12000                       # 100km × 120（自社のみ）
+    assert any("立替" in l["desc"] for l in inv["lines"])
+    assert len(inv["charter_lines"]) == 1                # 傭車は別仕分け
+    assert inv["charter_lines"][0]["amount"] == 800
+
+
+def test_invoice_xlsx_writes_sheet_per_party(tmp_path):
+    cfg = registry.get("sanpai")
+    slips = [core.extract("a.jpg", cfg)]
+    invs = invoice.build_invoices(cfg, slips)
+    p = tmp_path / "invoice.xlsx"
+    invoice.build_xlsx(cfg, invs, p)
+    from openpyxl import load_workbook
+    wb = load_workbook(p)
+    assert len(wb.sheetnames) == len(invs) >= 1
+
+
+def test_both_industries_have_billing():
+    for it in registry.list_industries():
+        assert "billing" in registry.get(it["id"])

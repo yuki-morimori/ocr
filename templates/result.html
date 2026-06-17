@@ -47,6 +47,14 @@
     <input type="hidden" name="payload" value="{{ json_text|e }}">
     <button class="dl" type="submit">📋 確認シート(.xlsx)を出力</button>
   </form>
+  {% if invoice_html %}
+  <form action="/invoice" method="post">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <input type="hidden" name="payload" value="{{ json_text|e }}">
+    <input type="hidden" name="month" value="{{ invoice_month }}">
+    <button class="dl" type="submit">🧾 請求書(.xlsx)を出力</button>
+  </form>
+  {% endif %}
   <form action="/learn" method="post" enctype="multipart/form-data" class="learnform">
     <input type="hidden" name="industry" value="{{ cfg.id }}">
     <span>訂正済みシートを取り込む:</span>
@@ -54,6 +62,14 @@
     <button class="dl ghost" type="submit">🧠 学習させる →</button>
   </form>
 </div>
+
+{% if invoice_html %}
+<section class="col" style="margin:6px 0 4px">
+  <h2>請求書プレビュー（この1枚／{{ invoice_month or '全期間' }}）</h2>
+  {{ invoice_html|safe }}
+  <p class="form-note">※ 月末は確認シートで確定した複数伝票をまとめて請求先ごとに集計します。</p>
+</section>
+{% endif %}
 
 <div class="cols">
   <section class="col">

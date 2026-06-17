@@ -46,6 +46,20 @@
     "subtitle": "（取引先ごとに月末集計 → 運賃請求書へ。傭車分は別仕分け）",
     "summary_note": "同じ日報から運賃請求とドライバー給与の素データを両方出せる。"
   },
+  "billing": {
+    "party_field": "client",
+    "party_label": "取引先",
+    "mode": "trip",
+    "qty_field": "total_distance",
+    "expense_field": "expense_amount",
+    "charter_field": "charter",
+    "charter_self": "自社",
+    "rate_per_unit": 120,
+    "unit": "km",
+    "currency": "円",
+    "tax_rate": 0.10,
+    "note": "運賃単価（円/km）はサンプル。実運用では区間契約/取引先マスタに差し替え。傭車分は別仕分け。"
+  },
   "mock": {
     "low_first_pass": ["expense_amount"],
     "date": "2026-06-15",
