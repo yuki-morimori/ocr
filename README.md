@@ -1,0 +1,92 @@
+# 汎用 帳票読み取りエンジン（業種切替デモ）
+
+手書き伝票の写真を入れると、**選んだ業種の文脈**でClaudeが読み取り、
+**構造化データ（JSON）＋帳票イメージ**を返すデモです。
+
+> 売り文句は「手書きをやめて専用書式に」ではなく
+> **「手書きはそのまま、写真を撮ると専用書式で出てくる」**。
+
+特定業種専用ツールではなく、**業種をまたいで使える汎用エンジン**。
+業種を増やす／変えるときは **`industries/*.json` を差し替えるだけ**で、
+コア（このリポジトリの `engine/`）は一切触りません。
+
+現在の同梱設定: **産業廃棄物処理業（sanpai）** / **運送業（unso）**。
+
+---
+
+## 三層構造
+
+| 層 | 役割 | 実体 | 変わるか |
+|----|------|------|----------|
+| **コア** | 画像 → Claude API → JSON構造化 → 帳票生成 | `engine/core.py`, `engine/forms.py` | 変えない（全業種共通） |
+| **業種別プロンプト設定** | 文脈宣言＋用語辞書＋出力の型＋補完抑制ルール | `industries/*.json` | 差し替えるだけ |
+| **業種別の見せ方** | 帳票テンプレ（設定の `form` が吸収） | `industries/*.json` の `form` | 業種特化の顔で出す |
+
+`engine/core.py` は業種に依存しません。プロンプトは設定JSONから**動的に**組み立てます。
+
+### 業種設定（プロンプト設定）に必ず入る4要素
+1. **文脈宣言** … `context_declaration`（例「これは産業廃棄物処理の計量伝票です」）
+2. **用語辞書** … `glossary`（混合廃棄物／正味重量／風袋／傭車／実車 など業界語と読みの癖）
+3. **出力の型** … `header_fields` ＋ `line_items`（後段の帳票に繋ぐため**項目順を固定**したJSON）
+4. **補完抑制ルール（最重要）** … `suppression_rules`（無い項目は空、読めない箇所は推測せず不明）
+   - 手書きの金額・重量を勝手に補完すると **請求ミス → 信用失墜** に直結するため保守的に。
+
+---
+
+## 使い方
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env        # ANTHROPIC_API_KEY を入れる（任意。無くてもモックで動く）
+
+# Webデモ
+uvicorn app:app --reload    # http://127.0.0.1:8000
+
+# CLI
+python cli.py --list
+python cli.py --industry sanpai 計量伝票.jpg --form out.html
+python cli.py --industry unso   運行日報.jpg
+```
+
+- **APIキーが無くても動く**：`industries/*.json` の `mock` を返すのでデモが止まりません。
+- **APIキーを入れると実OCR**：その場の**初見の伝票**をレイアウト固定なしで読み取ります
+  （訪問先で撮ってその場で帳票化、が最強デモ）。
+- APIキーは **サーバーサイドで保持**。フロントには出しません（Vercel / Cloudflare 想定）。
+
+---
+
+## 業種を1つ増やすには（コードを書かない）
+
+`industries/<新業種>.json` を1枚足すだけ。`engine/`・`app.py`・`cli.py` は無改変です。
+
+必須キー: `id` / `display_name` / `context_declaration` / `header_fields` / `line_items`
+（任意: `glossary` / `suppression_rules` / `form` / `mock`）。
+
+`line_items.columns` の数値列に `"sum": true` を付けると、帳票に合計行が出ます。
+横展開候補（介護記録・農業の出荷伝票・整備の点検記録・飲食の仕入伝票・問診票…）も
+**同じコア＋設定の追加**で対応できます。
+
+---
+
+## ディレクトリ
+
+```
+ocr/
+├─ engine/
+│  ├─ core.py       # コア：画像→Claude→構造化（業種非依存・無改変）
+│  ├─ forms.py      # コア：構造化→帳票HTML
+│  └─ registry.py   # industries/*.json の読み込み
+├─ industries/
+│  ├─ sanpai.json   # 産業廃棄物処理業の設定
+│  └─ unso.json     # 運送業の設定
+├─ app.py           # Webデモ（FastAPI）
+├─ cli.py           # CLIデモ
+├─ templates/ static/
+└─ tests/test_engine.py
+```
+
+## テスト
+
+```bash
+python -m pytest -q   # 6 passed（APIキー不要）
+```

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}汎用 帳票読み取りエンジン{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <a href="/" class="brand">📄 汎用 帳票読み取りエンジン <span>demo</span></a>
+    {% if live %}
+      <span class="mode live">● 実OCR（Claude）</span>
+    {% else %}
+      <span class="mode mock">● モック（APIキー未設定）</span>
+    {% endif %}
+  </header>
+  <main class="wrap">
+    {% block body %}{% endblock %}
+  </main>
+  <footer class="foot">
+    コア（画像→Claude→構造化→帳票）は共通。業種は <code>industries/*.json</code> の差し替えだけで切り替わります。
+  </footer>
+</body>
+</html>

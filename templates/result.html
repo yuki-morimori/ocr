@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}読み取り結果 — {{ cfg.display_name }}{% endblock %}
+{% block body %}
+<div class="result-head">
+  <a href="/" class="back">← 別の伝票を読む</a>
+  <h1>{{ cfg.display_name }} <small>{{ cfg.doc_label }}</small></h1>
+  {% if filename %}<p class="srcfile">入力: {{ filename }}</p>{% endif %}
+</div>
+
+{% if data._error %}<p class="error">{{ data._error }}</p>{% endif %}
+
+{% if data.unreadable_fields and data.unreadable_fields|length %}
+<p class="warn">⚠ 読み取れず空にした項目（推測していません）:
+  {% for k in data.unreadable_fields %}<code>{{ k }}</code>{% endfor %}
+</p>
+{% endif %}
+
+<div class="cols">
+  <section class="col">
+    <h2>帳票イメージ</h2>
+    {{ form_html|safe }}
+  </section>
+  <section class="col">
+    <h2>構造化データ（JSON）</h2>
+    <pre class="json">{{ json_text }}</pre>
+  </section>
+</div>
+{% endblock %}

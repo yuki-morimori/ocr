@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="hero">
+  <h1>手書きはそのまま。<br>写真を撮ると、専用書式で出てくる。</h1>
+  <p>業種を選んで伝票の写真を入れるだけ。同じコアのまま、選んだ業種の文脈で読み取ります。</p>
+</section>
+
+{% if error %}<p class="error">{{ error }}</p>{% endif %}
+
+<form class="card" action="/read" method="post" enctype="multipart/form-data">
+  <h2>1. 業種を選ぶ</h2>
+  <div class="industry-grid">
+    {% for it in industries %}
+    <label class="industry">
+      <input type="radio" name="industry" value="{{ it.id }}" {% if loop.first %}checked{% endif %}>
+      <span class="industry-card">
+        <strong>{{ it.display_name }}</strong>
+        <small>{{ it.doc_label }}</small>
+      </span>
+    </label>
+    {% endfor %}
+  </div>
+
+  <h2>2. 伝票の写真を入れる</h2>
+  <input class="file" type="file" name="image" accept="image/*" required>
+
+  <button class="go" type="submit">読み取って帳票にする →</button>
+  {% if not live %}
+  <p class="hint">※ いまはモック動作中（ANTHROPIC_API_KEY 未設定）。サンプルの構造化結果＋帳票を表示します。
+     キーを設定すると、その場の初見の伝票をそのまま読み取ります。</p>
+  {% endif %}
+</form>
+
+<section class="card explain">
+  <h2>仕組み（3層）</h2>
+  <ul class="layers">
+    <li><b>コア</b><span>画像 → Claude API → JSON構造化 → 帳票生成</span><em>全業種共通・無改変</em></li>
+    <li><b>業種別プロンプト設定</b><span>文脈宣言＋用語辞書＋出力の型＋補完抑制ルール</span><em>JSONを差し替えるだけ</em></li>
+    <li><b>業種別の見せ方</b><span>帳票テンプレ</span><em>業種特化の顔で出す</em></li>
+  </ul>
+</section>
+{% endblock %}

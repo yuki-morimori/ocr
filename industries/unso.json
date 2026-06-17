@@ -1,0 +1,63 @@
+{
+  "id": "unso",
+  "display_name": "運送業（一般貨物）",
+  "doc_label": "運行日報",
+  "context_declaration": "これは運送業（一般貨物・緑ナンバー）の『運行日報』です。1乗務員・1日ぶんの運行記録で、立寄先・距離・立替経費が手書きされていることが多いです。",
+  "glossary": [
+    {"term": "傭車", "note": "ようしゃ。他社へ運送を委託（外注）した便。自社便と分けて仕分けする。"},
+    {"term": "実車", "note": "荷物を積んで走っている状態。"},
+    {"term": "空車", "note": "荷物を積まずに走っている状態（帰り便など）。"},
+    {"term": "立寄先", "note": "たちよりさき。積地・卸地・経由地。区間の起点終点になる。"},
+    {"term": "運行", "note": "1日の運行。出庫〜帰庫。"},
+    {"term": "車番", "note": "車両番号・ナンバー・社内号車。"},
+    {"term": "区間", "note": "出発地→到着地。運賃計算の単位。"},
+    {"term": "立替経費", "note": "ドライバーが立て替えた高速代・駐車代・フェリー代など。後で精算。"}
+  ],
+  "header_fields": [
+    {"key": "date", "label": "運行日", "type": "date", "desc": "運行した日。和暦(R=令和)は西暦YYYY-MM-DDへ。"},
+    {"key": "driver", "label": "乗務員", "type": "text", "desc": "運転者氏名（手書きそのまま。姓のみ可）。"},
+    {"key": "vehicle_no", "label": "車番", "type": "text", "desc": "車両番号・号車。"},
+    {"key": "client", "label": "取引先 / 荷主", "type": "text", "desc": "運賃の請求先。記載が無ければ null。"},
+    {"key": "start_odo", "label": "出庫メーター(km)", "type": "number", "desc": "出発時の走行距離計。数値のみ。"},
+    {"key": "end_odo", "label": "帰庫メーター(km)", "type": "number", "desc": "帰着時の走行距離計。数値のみ。"},
+    {"key": "total_distance", "label": "走行距離(km)", "type": "number", "desc": "当日走行距離。記載があればそのまま。無く両メーターがあれば差で算出可。"}
+  ],
+  "line_items": {
+    "key": "trips",
+    "label": "運行明細（区間・立寄先）",
+    "row_hint": "1区間（または1立寄先）＝1行。積地→卸地ごとに行を分ける。",
+    "columns": [
+      {"key": "from_place", "label": "出発 / 積地", "type": "text", "desc": "区間の起点・立寄先。"},
+      {"key": "to_place", "label": "到着 / 卸地", "type": "text", "desc": "区間の終点・立寄先。"},
+      {"key": "cargo", "label": "品名 / 荷", "type": "text", "desc": "運んだ荷物。記載が無ければ null。"},
+      {"key": "charter", "label": "自社/傭車", "type": "text", "desc": "『傭車』『外注』の記載があれば傭車、無ければ自社。曖昧なら null。"},
+      {"key": "expense_type", "label": "立替費目", "type": "text", "desc": "高速・駐車・フェリー等。立替が無ければ null。"},
+      {"key": "expense_amount", "label": "立替金額(円)", "type": "number", "sum": true, "desc": "立替経費の金額。数値のみ。無ければ null。"}
+    ]
+  },
+  "suppression_rules": [
+    "距離・メーター・金額は読めたものだけ入れる。かすれ・読めない箇所は推測せず null。",
+    "立替経費の金額は精算・請求に直結するため、1円も補完しない。読めなければ null。",
+    "傭車/自社の区別は明記がある時だけ。曖昧なら null（傭車分は別仕分けのため誤判定を避ける）。",
+    "走行距離は『帰庫−出庫』が両方読めた時だけ算出してよい。どちらか欠ければ null。"
+  ],
+  "form": {
+    "title": "運行報告・運賃請求 素データ",
+    "subtitle": "（取引先ごとに月末集計 → 運賃請求書へ。傭車分は別仕分け）",
+    "summary_note": "同じ日報から運賃請求とドライバー給与の素データを両方出せる。"
+  },
+  "mock": {
+    "date": "2026-06-15",
+    "driver": "濱崎",
+    "vehicle_no": "習志野130あ8842",
+    "client": "東日本物流(株)",
+    "start_odo": 84210,
+    "end_odo": 84612,
+    "total_distance": 402,
+    "trips": [
+      {"from_place": "千葉物流センター", "to_place": "大宮DC", "cargo": "雑貨パレット", "charter": "自社", "expense_type": "高速", "expense_amount": 3620},
+      {"from_place": "大宮DC", "to_place": "柏営業所", "cargo": "空車", "charter": "自社", "expense_type": "駐車", "expense_amount": 600}
+    ],
+    "unreadable_fields": []
+  }
+}
