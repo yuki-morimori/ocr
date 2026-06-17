@@ -41,6 +41,20 @@
 </p>
 {% endif %}
 
+<div class="toolbar">
+  <form action="/review" method="post">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <input type="hidden" name="payload" value="{{ json_text|e }}">
+    <button class="dl" type="submit">📋 確認シート(.xlsx)を出力</button>
+  </form>
+  <form action="/learn" method="post" enctype="multipart/form-data" class="learnform">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <span>訂正済みシートを取り込む:</span>
+    <input type="file" name="sheet" accept=".xlsx" required>
+    <button class="dl ghost" type="submit">🧠 学習させる →</button>
+  </form>
+</div>
+
 <div class="cols">
   <section class="col">
     <h2>帳票イメージ</h2>

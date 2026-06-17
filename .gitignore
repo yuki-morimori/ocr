@@ -7,3 +7,6 @@ venv/
 .pytest_cache/
 out.html
 /uploads/
+# 学習データはランタイムで蓄積（テナントごと）。仕組みは同梱、中身は追跡しない
+/learnings/*.json
+*.xlsx

@@ -3,12 +3,15 @@
 
 実行: cd ocr && python -m pytest -q
 """
+import io
 import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine import core, forms, registry  # noqa: E402
+from engine import core, forms, learning, registry, review_sheet  # noqa: E402
+
+from openpyxl import load_workbook  # noqa: E402
 
 
 def test_industries_registered():
@@ -130,3 +133,81 @@ def test_unknown_industry_raises():
         assert False, "should raise"
     except KeyError:
         pass
+
+
+def _hl(cfg, d):
+    """比較用にヘッダ＋明細だけ取り出す。"""
+    li = cfg["line_items"]["key"]
+    return ({f["key"]: d.get(f["key"]) for f in cfg["header_fields"]}, d.get(li))
+
+
+def test_review_sheet_roundtrip_preserves_values():
+    """確認シートを出力→読み戻して、ヘッダ・明細が一致する。"""
+    cfg = registry.get("sanpai")
+    results = [core.extract("a.jpg", cfg), core.extract("b.jpg", cfg)]
+    bio = io.BytesIO()
+    review_sheet.build(cfg, results, bio)
+    bio.seek(0)
+    back = review_sheet.read(cfg, bio, learn=False)
+    assert len(back) == len(results)
+    for src, got in zip(results, back):
+        assert _hl(cfg, src) == _hl(cfg, got)
+
+
+def test_review_sheet_flags_human_review(tmp_path):
+    """要人間確認の伝票は『要確認』、それ以外は『OK』が入る。"""
+    cfg = registry.get("unso")
+    res = core.extract("x.jpg", cfg)
+    res["needs_human_review"] = ["expense_amount"]  # 強制的に要確認に
+    p = tmp_path / "review.xlsx"
+    review_sheet.build(cfg, [res], p)
+    wb = load_workbook(p)
+    ws = wb["確認シート"]
+    confirm_col = [c[1] for c in review_sheet._columns(cfg)].index("確認") + 1
+    vals = [ws.cell(r, confirm_col).value for r in range(5, ws.max_row + 1)]
+    assert "要確認" in vals
+
+
+def test_learning_makes_it_smarter(monkeypatch, tmp_path):
+    """訂正を読み戻すと、誤読の訂正と語彙が蓄積され、次回プロンプトに載る。"""
+    monkeypatch.setenv("OCR_LEARN_DIR", str(tmp_path))
+    cfg = registry.get("sanpai")
+    # OCRが「丸北健設」と誤読 → 人が「丸北建設」に訂正
+    original = [core._normalize(cfg, {"emitter": "丸北健設", "items": [{"item": "混合廃棄物"}]})]
+    corrected = [core._normalize(cfg, {"emitter": "丸北建設", "items": [{"item": "混合廃棄物"}]})]
+    stats = learning.learn_from(cfg, original, corrected)
+    assert stats["new_corrections"] == 1
+    assert stats["total_vocabulary"] >= 2  # 排出事業者＋品目
+
+    block = learning.as_prompt_block(cfg)
+    assert "丸北健設" in block and "丸北建設" in block      # 誤読→正の訂正
+    assert "混合廃棄物" in block                            # 確認済み語彙
+
+    # 次回の system プロンプトに学習が差し込まれている＝賢くなっている
+    sp = core.build_system_prompt(cfg)
+    assert "現場で確定した学習メモ" in sp
+    assert "丸北建設" in sp
+
+    # もう一度同じ訂正 → 回数が増える（累積する）
+    learning.learn_from(cfg, original, corrected)
+    again = learning.load(cfg)["corrections"][0]
+    assert again["count"] == 2
+
+
+def test_learning_loop_through_sheet(monkeypatch, tmp_path):
+    """確認シート経由でも学習が回る（隠しシートの元値と差分を取る）。"""
+    monkeypatch.setenv("OCR_LEARN_DIR", str(tmp_path))
+    cfg = registry.get("unso")
+    res = core.extract("r.jpg", cfg)  # mock。driver="濱崎"
+    p = tmp_path / "review.xlsx"
+    review_sheet.build(cfg, [res], p)
+    # 人が乗務員名を訂正（濱崎→浜崎）
+    wb = load_workbook(p)
+    ws = wb["確認シート"]
+    driver_col = [c[0] for c in review_sheet._columns(cfg)].index("driver") + 1
+    ws.cell(5, driver_col).value = "浜崎"
+    wb.save(p)
+    before = learning.summary(cfg)["corrections"]
+    review_sheet.read(cfg, p, learn=True)
+    after = learning.summary(cfg)["corrections"]
+    assert after == before + 1

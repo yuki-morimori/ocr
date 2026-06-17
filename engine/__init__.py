@@ -6,6 +6,6 @@
     core.extract(image_path, cfg)                    画像→構造化データ
     forms.render_form(cfg, data)                     構造化データ→帳票HTML
 """
-from . import core, forms, registry  # noqa: F401
+from . import core, forms, learning, registry, review_sheet  # noqa: F401
 
-__all__ = ["core", "forms", "registry"]
+__all__ = ["core", "forms", "learning", "registry", "review_sheet"]

@@ -14,16 +14,20 @@
 """
 from __future__ import annotations
 
+import io
+import json
 import os
 import tempfile
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, Request, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from engine import core, forms, registry
+from engine import core, forms, learning, registry, review_sheet
+
+_XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
 BASE = Path(__file__).resolve().parent
 app = FastAPI(title="汎用 帳票読み取りエンジン デモ")
@@ -81,9 +85,47 @@ async def read(request: Request, industry: str = Form(...), image: UploadFile = 
     )
 
 
-def _pretty(data: dict) -> str:
-    import json
+@app.post("/review")
+def review(industry: str = Form(...), payload: str = Form(...)):
+    """読み取り結果から確認シート(.xlsx)を生成してダウンロードさせる。"""
+    cfg = registry.get(industry)
+    data = json.loads(payload)
+    results = data if isinstance(data, list) else [data]
+    bio = io.BytesIO()
+    review_sheet.build(cfg, results, bio)
+    return Response(
+        content=bio.getvalue(),
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="review_{cfg["id"]}.xlsx"'},
+    )
 
+
+@app.post("/learn", response_class=HTMLResponse)
+async def learn(request: Request, industry: str = Form(...), sheet: UploadFile = File(...)):
+    """人が訂正した確認シートを受け取り、学習を更新して結果を表示する。"""
+    cfg = registry.get(industry)
+    before = learning.summary(cfg)
+    suffix = Path(sheet.filename or "review.xlsx").suffix or ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await sheet.read())
+        tmp_path = Path(tmp.name)
+    try:
+        review_sheet.read(cfg, tmp_path, learn=True)
+    finally:
+        os.unlink(tmp_path)
+    return templates.TemplateResponse(
+        request,
+        "learned.html",
+        {
+            "cfg": cfg,
+            "before": before,
+            "after": learning.summary(cfg),
+            "block": learning.as_prompt_block(cfg),
+        },
+    )
+
+
+def _pretty(data: dict) -> str:
     return json.dumps(data, ensure_ascii=False, indent=2)
 
 

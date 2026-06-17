@@ -151,12 +151,15 @@ def build_system_prompt(cfg: dict) -> str:
     )
     for r in cfg.get("suppression_rules", []):
         suppression += f"- {r}\n"
+    from . import learning  # 遅延import（循環回避）
+
     parts = [
         f"あなたは「{cfg['display_name']}」の帳票を読み取る専属オペレーターです。",
         f"# 文脈宣言\n{cfg['context_declaration']}",
         f"対象帳票: {cfg['doc_label']}。",
         _COMMON_RULES,
         _glossary_block(cfg),
+        learning.as_prompt_block(cfg),  # 確認シートの訂正から自動蓄積（読み戻すほど賢くなる）
         _schema_block(cfg),
         _confidence_block(),
         suppression,

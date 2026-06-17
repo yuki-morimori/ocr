@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}学習しました — {{ cfg.display_name }}{% endblock %}
+{% block body %}
+<div class="result-head">
+  <a href="/" class="back">← トップへ</a>
+  <h1>🧠 学習しました <small>{{ cfg.display_name }}</small></h1>
+</div>
+
+<section class="card">
+  <p>確認シートの訂正を取り込みました。次回以降の読み取りで自動的に反映されます
+     （読み戻すほど賢くなります）。</p>
+  <table class="kv">
+    <tr><th>誤読の訂正</th><td>{{ before.corrections }} → <b>{{ after.corrections }}</b> 件</td></tr>
+    <tr><th>確認済みの語彙</th><td>{{ before.vocabulary }} → <b>{{ after.vocabulary }}</b> 件</td></tr>
+    <tr><th>累計の学習伝票</th><td><b>{{ after.sheets_learned }}</b> 伝票</td></tr>
+  </table>
+</section>
+
+{% if block %}
+<section class="card">
+  <h2>いま system プロンプトに積まれている学習メモ</h2>
+  <pre class="json">{{ block }}</pre>
+  <p class="form-note">※ この内容が業種別プロンプトに自動で差し込まれ、誤読の再発防止と
+     固有名詞の認識に効きます（キャッシュ対象なので増えた時だけ更新）。</p>
+</section>
+{% endif %}
+{% endblock %}
