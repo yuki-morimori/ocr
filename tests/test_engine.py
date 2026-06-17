@@ -9,7 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine import core, forms, invoice, learning, registry, review_sheet  # noqa: E402
+from engine import core, forms, invoice, learning, registry, report, review_sheet  # noqa: E402
 
 from openpyxl import load_workbook  # noqa: E402
 
@@ -276,3 +276,59 @@ def test_invoice_xlsx_writes_sheet_per_party(tmp_path):
 def test_both_industries_have_billing():
     for it in registry.list_industries():
         assert "billing" in registry.get(it["id"])
+
+
+def test_report_aggregates_by_company_and_vehicle():
+    """会社別・車番別・クロスで 立替経費/走行距離/件数 を集計する。"""
+    cfg = registry.get("unso")
+    N = core._normalize
+    slips = [
+        N(cfg, {"date": "2026-06-01", "client": "A物流", "vehicle_no": "車1", "driver": "甲",
+                "total_distance": 100, "trips": [{"expense_amount": 1000}, {"expense_amount": 500}]}),
+        N(cfg, {"date": "2026-06-02", "client": "A物流", "vehicle_no": "車1", "driver": "甲",
+                "total_distance": 50, "trips": [{"expense_amount": 200}]}),
+        N(cfg, {"date": "2026-06-03", "client": "B運輸", "vehicle_no": "車2", "driver": "乙",
+                "total_distance": 300, "trips": [{"expense_amount": 800}]}),
+    ]
+    rep = report.aggregate(cfg, slips, month="2026-06")
+    by = {d["label"]: d for d in rep["dimensions"]}
+    assert {"取引先", "車番", "乗務員"} <= set(by)
+    car1 = next(r for r in by["車番"]["rows"] if r["value"] == "車1")
+    assert car1["measures"]["expense_amount"] == 1700   # 1000+500+200
+    assert car1["measures"]["total_distance"] == 150
+    assert car1["measures"]["_count"] == 2
+    # クロス（取引先×車番）
+    assert rep["cross"]["a_label"] == "取引先" and rep["cross"]["b_label"] == "車番"
+    a_car1 = next(r for r in rep["cross"]["rows"] if r["a"] == "A物流" and r["b"] == "車1")
+    assert a_car1["measures"]["expense_amount"] == 1700
+
+
+def test_report_month_filter_and_unknown():
+    cfg = registry.get("unso")
+    N = core._normalize
+    slips = [
+        N(cfg, {"date": "2026-06-01", "client": "A", "vehicle_no": "車1", "trips": [{"expense_amount": 100}]}),
+        N(cfg, {"date": "2026-05-01", "client": "A", "vehicle_no": "車1", "trips": [{"expense_amount": 999}]}),
+        N(cfg, {"date": "2026-06-02", "vehicle_no": None, "trips": [{"expense_amount": 50}]}),
+    ]
+    rep = report.aggregate(cfg, slips, month="2026-06")
+    assert rep["slip_count"] == 2                       # 5月分は除外
+    veh = {r["value"]: r for r in next(d for d in rep["dimensions"] if d["label"] == "車番")["rows"]}
+    assert "（不明）" in veh                             # 車番なしは（不明）に集計
+
+
+def test_report_xlsx_has_sheet_per_dimension_plus_cross(tmp_path):
+    cfg = registry.get("unso")
+    slips = [core.extract("a.jpg", cfg)]
+    rep = report.aggregate(cfg, slips)
+    p = tmp_path / "report.xlsx"
+    report.build_xlsx(cfg, rep, p)
+    from openpyxl import load_workbook
+    names = load_workbook(p).sheetnames
+    # 3軸 + クロス1
+    assert len(names) == len(rep["dimensions"]) + 1
+
+
+def test_both_industries_have_analytics():
+    for it in registry.list_industries():
+        assert "analytics" in registry.get(it["id"])

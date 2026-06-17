@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}集計レポート — {{ cfg.display_name }}{% endblock %}
+{% block body %}
+<div class="result-head">
+  <a href="/" class="back">← トップへ</a>
+  <h1>📊 集計レポート <small>{{ cfg.display_name }}</small></h1>
+  <p class="srcfile">確認シートから {{ slip_count }} 枚を集計しました。</p>
+</div>
+
+<div class="toolbar">
+  <form action="/report" method="post">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <input type="hidden" name="payload" value="{{ payload|e }}">
+    <input type="hidden" name="month" value="{{ month }}">
+    <button class="dl" type="submit">📊 集計レポート(.xlsx)を出力</button>
+  </form>
+</div>
+
+<section class="col">{{ report_html|safe }}</section>
+{% endblock %}

@@ -58,6 +58,16 @@
     "unit_prices": {"混合": 25, "単品": 12, "_default": 15},
     "note": "単価（円/kg）はサンプル。実運用では取引先マスタの単価に差し替え。混合は高単価。"
   },
+  "analytics": {
+    "dimensions": [
+      {"key": "emitter", "label": "排出事業者"},
+      {"key": "vehicle_no", "label": "車番"}
+    ],
+    "measures": [
+      {"key": "net", "label": "正味重量", "unit": "kg", "source": "line", "agg": "sum"},
+      {"key": "_count", "label": "搬入回数", "agg": "count"}
+    ]
+  },
   "mock": {
     "date": "2026-06-15",
     "weigh_time": "10:35",

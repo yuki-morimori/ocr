@@ -14,7 +14,7 @@ import json
 import sys
 from pathlib import Path
 
-from engine import core, forms, invoice, learning, registry, review_sheet
+from engine import core, forms, invoice, learning, registry, report, review_sheet
 
 
 def main() -> None:
@@ -26,7 +26,8 @@ def main() -> None:
     p.add_argument("--apply", type=Path, help="訂正済み確認シート(.xlsx)を読み戻してJSON出力（学習更新）")
     p.add_argument("--form", type=Path, help="先頭伝票の帳票HTML出力先")
     p.add_argument("--invoice", type=Path, help="請求書(.xlsx)の出力先（請求先ごとに集計）")
-    p.add_argument("--month", help="請求対象月 YYYY-MM（省略時は全期間）")
+    p.add_argument("--report", type=Path, help="集計レポート(.xlsx)の出力先（会社別・車番別 等）")
+    p.add_argument("--month", help="対象月 YYYY-MM（請求書・集計の絞り込み。省略時は全期間）")
     p.add_argument("--learned", action="store_true", help="蓄積された学習内容を表示")
     args = p.parse_args()
 
@@ -81,6 +82,13 @@ def main() -> None:
         tot = sum(i["total"] for i in invs)
         print(f"請求書を保存しました: {args.invoice}"
               f"（請求先 {len(invs)} 件 / 合計 {tot:,}円）", file=sys.stderr)
+    if args.report:
+        if "analytics" not in cfg:
+            raise SystemExit(f"{cfg['display_name']} には analytics 設定がありません。")
+        rep = report.aggregate(cfg, results, month=args.month)
+        report.build_xlsx(cfg, rep, args.report)
+        dims = " / ".join(f"{d['label']}{len(d['rows'])}件" for d in rep["dimensions"])
+        print(f"集計レポートを保存しました: {args.report}（{dims}）", file=sys.stderr)
 
 
 def _print_industries() -> None:

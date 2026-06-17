@@ -55,12 +55,31 @@
     <button class="dl" type="submit">🧾 請求書(.xlsx)を出力</button>
   </form>
   {% endif %}
+  {% if cfg.analytics %}
+  <form action="/report" method="post">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <input type="hidden" name="payload" value="{{ json_text|e }}">
+    <input type="hidden" name="month" value="{{ invoice_month }}">
+    <button class="dl ghost" type="submit">📊 集計(.xlsx)</button>
+  </form>
+  {% endif %}
+</div>
+
+<div class="toolbar">
   <form action="/learn" method="post" enctype="multipart/form-data" class="learnform">
     <input type="hidden" name="industry" value="{{ cfg.id }}">
     <span>訂正済みシートを取り込む:</span>
     <input type="file" name="sheet" accept=".xlsx" required>
     <button class="dl ghost" type="submit">🧠 学習させる →</button>
   </form>
+  {% if cfg.analytics %}
+  <form action="/report-sheet" method="post" enctype="multipart/form-data" class="learnform">
+    <input type="hidden" name="industry" value="{{ cfg.id }}">
+    <span>確認シートから集計:</span>
+    <input type="file" name="sheet" accept=".xlsx" required>
+    <button class="dl ghost" type="submit">📊 会社別・車番別に集計 →</button>
+  </form>
+  {% endif %}
 </div>
 
 {% if invoice_html %}

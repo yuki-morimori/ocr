@@ -111,5 +111,6 @@ table.lines td.num{text-align:right;font-variant-numeric:tabular-nums}
 .sumrow.grand td{background:#1f2a3a;color:#fff}
 .sumrow.grand .total{color:#fff;font-size:1.05rem}
 .invoice .charter-h{font-size:.95rem;margin:14px 0 6px;color:var(--muted)}
+.rep-h{font-size:1rem;margin:18px 0 6px;color:var(--ink);border-left:4px solid var(--brand);padding-left:8px}
 .empty{color:#b6bfca}
 .form-note{color:var(--muted);font-size:.8rem;margin-top:12px}

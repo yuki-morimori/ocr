@@ -60,6 +60,18 @@
     "tax_rate": 0.10,
     "note": "運賃単価（円/km）はサンプル。実運用では区間契約/取引先マスタに差し替え。傭車分は別仕分け。"
   },
+  "analytics": {
+    "dimensions": [
+      {"key": "client", "label": "取引先"},
+      {"key": "vehicle_no", "label": "車番"},
+      {"key": "driver", "label": "乗務員"}
+    ],
+    "measures": [
+      {"key": "expense_amount", "label": "立替経費", "unit": "円", "source": "line", "agg": "sum"},
+      {"key": "total_distance", "label": "走行距離", "unit": "km", "source": "header", "agg": "sum"},
+      {"key": "_count", "label": "運行数", "agg": "count"}
+    ]
+  },
   "mock": {
     "low_first_pass": ["expense_amount"],
     "date": "2026-06-15",

@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from engine import core, forms, invoice, learning, registry, review_sheet
+from engine import core, forms, invoice, learning, registry, report, review_sheet
 
 _XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 
@@ -126,6 +126,47 @@ def make_invoice(industry: str = Form(...), payload: str = Form(...), month: str
         content=bio.getvalue(),
         media_type=_XLSX_MIME,
         headers={"Content-Disposition": f'attachment; filename="invoice_{cfg["id"]}.xlsx"'},
+    )
+
+
+@app.post("/report")
+def make_report(industry: str = Form(...), payload: str = Form(...), month: str = Form("")):
+    """確定データから集計レポート(.xlsx)を生成（会社別・車番別 等）。"""
+    cfg = registry.get(industry)
+    if "analytics" not in cfg:
+        return Response("この業種には集計設定がありません。", status_code=400)
+    data = json.loads(payload)
+    results = data if isinstance(data, list) else [data]
+    rep = report.aggregate(cfg, results, month=month or None)
+    bio = io.BytesIO()
+    report.build_xlsx(cfg, rep, bio)
+    return Response(
+        content=bio.getvalue(),
+        media_type=_XLSX_MIME,
+        headers={"Content-Disposition": f'attachment; filename="report_{cfg["id"]}.xlsx"'},
+    )
+
+
+@app.post("/report-sheet", response_class=HTMLResponse)
+async def report_from_sheet(request: Request, industry: str = Form(...), sheet: UploadFile = File(...)):
+    """確認シート（複数伝票）を取り込み、会社別・車番別の集計レポートをプレビュー表示。"""
+    cfg = registry.get(industry)
+    if "analytics" not in cfg:
+        return Response("この業種には集計設定がありません。", status_code=400)
+    suffix = Path(sheet.filename or "review.xlsx").suffix or ".xlsx"
+    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        tmp.write(await sheet.read())
+        tmp_path = Path(tmp.name)
+    try:
+        results = review_sheet.read(cfg, tmp_path, learn=False)  # 集計だけ。学習は /learn 側
+    finally:
+        os.unlink(tmp_path)
+    rep = report.aggregate(cfg, results)
+    return templates.TemplateResponse(
+        request,
+        "report.html",
+        {"cfg": cfg, "report_html": report.render_html(cfg, rep), "slip_count": rep["slip_count"],
+         "payload": _pretty(results), "month": ""},
     )
 
 
