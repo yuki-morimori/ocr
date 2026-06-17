@@ -9,8 +9,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from engine import (core, forms, invoice, learning, payroll,  # noqa: E402
-                    registry, report, review_sheet)
+from engine import (core, forms, invoice, learning, matching,  # noqa: E402
+                    payroll, registry, report, review_sheet)
 
 from openpyxl import load_workbook  # noqa: E402
 
@@ -407,3 +407,72 @@ def test_payroll_xlsx_sheet_per_driver(tmp_path):
     payroll.build_xlsx(cfg, pays, p)
     from openpyxl import load_workbook
     assert len(load_workbook(p).sheetnames) == len(pays) >= 1
+
+
+# ── 名寄せ（マスタ先読み＋表記ゆれ吸収）─────────────────────────────────────────
+def test_matching_company_and_name():
+    # 会社: 種別語・記号の揺れを完全一致で吸収。別会社は誤統合しない（部分一致しない）
+    comp = ["丸北建設(株)"]
+    assert matching.match("丸北建設株式会社", comp, company=True) == ("exact", "丸北建設(株)")
+    assert matching.match("丸 北 建 設", comp, company=True) == ("exact", "丸北建設(株)")
+    assert matching.match("丸北健設", comp, company=True)[0] == "candidate"   # 誤字→要確認
+    assert matching.match("南総運輸", comp, company=True) == ("none", None)
+    # 氏名: 姓のみ→フルネーム、旧字﨑も吸収
+    names = ["濱﨑 太郎", "阿久澤 健"]
+    assert matching.match("濱崎", names) == ("exact", "濱﨑 太郎")
+    assert matching.match("浜﨑", names) == ("exact", "濱﨑 太郎")
+
+
+def test_master_seed_then_canonicalize(monkeypatch, tmp_path):
+    """名簿を先読み → extract時に氏名がフルネームへ自動で寄る（cold-start辞書）。"""
+    monkeypatch.setenv("OCR_LEARN_DIR", str(tmp_path))
+    cfg = registry.get("kensetsu")
+    learning.seed_vocabulary(cfg, {"prime_contractor": ["丸北建設(株)"],
+                                   "name": ["濱﨑 太郎", "阿久澤 健", "佐野 一郎"]})
+    data = core.extract("a.jpg", cfg)   # mock の作業者は姓のみ
+    got = [w["name"] for w in data["workers"]]
+    assert "濱﨑 太郎" in got and "阿久澤 健" in got     # フルネームへ寄った
+    assert data["needs_human_review"] == []             # 完全/部分一致なので要確認なし
+
+
+def test_master_import_file_csv(monkeypatch, tmp_path):
+    monkeypatch.setenv("OCR_LEARN_DIR", str(tmp_path))
+    cfg = registry.get("kensetsu")
+    csv = tmp_path / "roster.csv"
+    csv.write_text("元請,氏名\n丸北建設,濱﨑 太郎\n大崎組,阿久澤 健\n", encoding="utf-8")
+    res = learning.import_master_file(cfg, csv, {"prime_contractor": "元請", "name": "氏名"})
+    assert res["added"] == 4
+    assert "濱﨑 太郎" in learning.candidates(cfg, "name")
+    assert "大崎組" in learning.candidates(cfg, "prime_contractor")
+
+
+def test_ambiguous_company_flags_review(monkeypatch, tmp_path):
+    """会社名のあいまい一致は自動で替えず『要確認』にする（誤統合=請求事故を防ぐ）。"""
+    monkeypatch.setenv("OCR_LEARN_DIR", str(tmp_path))
+    cfg = registry.get("sanpai")
+    learning.seed_vocabulary(cfg, {"emitter": ["丸北建設(株)"]})
+    data = core._normalize(cfg, {"emitter": "丸北健設", "items": []})
+    core._apply_name_matching(cfg, data)
+    assert data["emitter"] == "丸北健設"                 # 勝手に替えない
+    assert "emitter" in data["needs_human_review"]       # 人に確認を促す
+
+
+# ── 4業種目（建設）と人工×単価の常用請求 ──────────────────────────────────────
+def test_kensetsu_registered_and_manday_billing():
+    ids = {it["id"] for it in registry.list_industries()}
+    assert "kensetsu" in ids
+    cfg = registry.get("kensetsu")
+    N = core._normalize
+    slips = [N(cfg, {"date": "2026-06-01", "prime_contractor": "丸北建設(株)",
+                     "workers": [{"name": "A", "person_days": 1.0}, {"name": "B", "person_days": 0.5}]})]
+    inv = invoice.build_invoices(cfg, slips, month="2026-06")[0]
+    assert inv["party"] == "丸北建設(株)"
+    assert inv["lines"][0]["amount"] == 27000            # 1.5人工 × 18000
+    assert inv["tax"] == 2700 and inv["total"] == 29700
+    rep = report.aggregate(cfg, slips)
+    assert rep["dimensions"][0]["rows"][0]["measures"]["person_days"] == 1.5
+
+
+def test_all_industries_have_matching():
+    for it in registry.list_industries():
+        assert "matching" in registry.get(it["id"])

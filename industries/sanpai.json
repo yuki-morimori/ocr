@@ -58,6 +58,10 @@
     "unit_prices": {"混合": 25, "単品": 12, "_default": 15},
     "note": "単価（円/kg）はサンプル。実運用では取引先マスタの単価に差し替え。混合は高単価。"
   },
+  "matching": {
+    "fields": [{"key": "emitter", "company": true}],
+    "line_fields": []
+  },
   "analytics": {
     "dimensions": [
       {"key": "emitter", "label": "排出事業者"},

@@ -67,6 +67,8 @@ def build_invoices(cfg: dict, results: list[dict], month: str | None = None,
         slips = groups[party]
         if b["mode"] == "weight":
             lines, charter = _lines_weight(cfg, slips, prices)
+        elif b["mode"] == "manday":
+            lines, charter = _lines_manday(cfg, slips, prices)
         else:
             lines, charter = _lines_trip(cfg, slips, prices)
         subtotal = sum(l["amount"] for l in lines)
@@ -120,6 +122,25 @@ def _lines_weight(cfg: dict, slips: list[dict], prices: dict | None):
         lines.append({
             "desc": label, "qty": a["qty"], "qty_unit": b.get("unit", ""),
             "unit_price": unit_price, "amount": _yen(amount),
+        })
+    return lines, []
+
+
+def _lines_manday(cfg: dict, slips: list[dict], prices: dict | None):
+    """建設: 元請ごとに 人工合計×人工単価。明細(workers)の person_days を合算。"""
+    b = cfg["billing"]
+    rate = float((prices or {}).get(b.get("party_label", ""), b.get("rate", 0)))
+    li = cfg["line_items"]["key"]
+    qf = b["qty_field"]
+    mandays = 0.0
+    for slip in slips:
+        mandays += sum(_num(w.get(qf)) or 0 for w in slip.get(li) or [])
+    lines = []
+    if mandays:
+        lines.append({
+            "desc": f"常用（{_q(mandays)} {b.get('unit','人工')} × {int(rate):,}{b.get('currency','円')}）",
+            "qty": mandays, "qty_unit": b.get("unit", "人工"),
+            "unit_price": rate, "amount": _yen(mandays * rate),
         })
     return lines, []
 

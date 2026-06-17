@@ -30,6 +30,9 @@ def main() -> None:
     p.add_argument("--payroll", type=Path, help="給与素データ(.xlsx)の出力先（対象者ごと）")
     p.add_argument("--month", help="対象月 YYYY-MM（請求書・集計・給与の絞り込み。省略時は全期間）")
     p.add_argument("--learned", action="store_true", help="蓄積された学習内容を表示")
+    p.add_argument("--seed-master", dest="seed_master", type=Path,
+                   help="名簿/取引先リスト(CSV/Excel)を先読み辞書に取り込む")
+    p.add_argument("--map", help="先読みの列対応 例 'name=氏名,prime_contractor=元請'")
     args = p.parse_args()
 
     if args.list:
@@ -43,6 +46,23 @@ def main() -> None:
     if args.learned:
         print(learning.as_prompt_block(cfg) or "（まだ学習はありません）")
         print(f"\n[学習サマリ] {json.dumps(learning.summary(cfg), ensure_ascii=False)}", file=sys.stderr)
+        return
+
+    # マスタ/名簿の先読み（cold-start辞書。初回からその会社の固有名詞が効く）
+    if args.seed_master:
+        if not args.seed_master.exists():
+            raise SystemExit(f"マスタが見つかりません: {args.seed_master}")
+        if not args.map:
+            raise SystemExit("--map で列対応を指定してください 例 'prime_contractor=元請,name=氏名'")
+        field_map = {}
+        for pair in args.map.split(","):
+            k, _, col = pair.partition("=")
+            k, col = k.strip(), col.strip()
+            if k and col:
+                field_map[k] = int(col) if col.isdigit() else col
+        res = learning.import_master_file(cfg, args.seed_master, field_map)
+        print(f"先読み辞書に取り込みました（追加 {res['added']} 件 / 語彙 {res['total_vocabulary']} 件）",
+              file=sys.stderr)
         return
 
     # データ源：訂正済みシートの読み戻し（ループを閉じる＝学習更新）か、画像の読み取り

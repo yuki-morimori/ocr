@@ -78,6 +78,10 @@
       {"key": "_count", "label": "運行数", "agg": "count"}
     ]
   },
+  "matching": {
+    "fields": [{"key": "client", "company": true}],
+    "line_fields": []
+  },
   "payroll": {
     "party_field": "driver",
     "party_label": "乗務員",

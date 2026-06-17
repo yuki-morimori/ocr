@@ -271,15 +271,54 @@ def extract(image_path: str | Path, cfg: dict) -> dict:
     """画像1枚 + 業種設定 → 構造化dict（自信度・エスカレーション履歴つき）。
 
     APIキーが無ければモックを返す（デモが止まらない）。実OCR失敗時もモックにフォールバック。
+    最後に名寄せ（既知マスタ/学習語彙への寄せ）をかけてから返す。
     """
     if not available():
-        return _mock_result(cfg)
-    try:
-        return _extract_with_escalation(Path(image_path), cfg)
-    except Exception as e:  # noqa: BLE001 — デモ継続のためフォールバック
-        fallback = _mock_result(cfg)
-        fallback["_error"] = f"実OCRに失敗したためサンプルを表示しています: {e}"
-        return fallback
+        data = _mock_result(cfg)
+    else:
+        try:
+            data = _extract_with_escalation(Path(image_path), cfg)
+        except Exception as e:  # noqa: BLE001 — デモ継続のためフォールバック
+            data = _mock_result(cfg)
+            data["_error"] = f"実OCRに失敗したためサンプルを表示しています: {e}"
+    _apply_name_matching(cfg, data)
+    return data
+
+
+def _apply_name_matching(cfg: dict, data: dict) -> None:
+    """会社名・氏名を既知の正式表記へ寄せる（完全一致は自動、あいまいは要確認）。
+
+    cfg["matching"] が無い、または既知語彙が無ければ何もしない（安全な no-op）。
+    """
+    mc = cfg.get("matching")
+    if not mc:
+        return
+    from . import learning, matching
+
+    review = set(data.get("needs_human_review") or [])
+    conf = data.get("confidence") or {}
+    li_key = cfg["line_items"]["key"]
+
+    def _fix(key: str, company: bool, value):
+        cands = learning.candidates(cfg, key)
+        if not value or not cands:
+            return value
+        status, canonical = matching.match(str(value), cands, company=company)
+        if status == "exact" and canonical and canonical != value:
+            return canonical                       # 正式表記へ自動で寄せる
+        if status == "candidate":
+            review.add(key)                        # あいまい → 要確認（自動では替えない）
+            conf[key] = "low"
+        return value
+
+    for f in mc.get("fields", []):
+        data[f["key"]] = _fix(f["key"], f.get("company", False), data.get(f["key"]))
+    for col in mc.get("line_fields", []):
+        for row in data.get(li_key) or []:
+            row[col["key"]] = _fix(col["key"], col.get("company", False), row.get(col["key"]))
+
+    data["confidence"] = conf
+    data["needs_human_review"] = sorted(review)
 
 
 def _extract_with_escalation(path: Path, cfg: dict) -> dict:

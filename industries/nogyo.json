@@ -51,6 +51,10 @@
     "unit_prices": {"秀": 1500, "優": 1200, "良": 900, "_default": 1000},
     "note": "単価（円/ケース）と税率8%（軽減税率）はサンプル。実運用は市場/JAの建値・出荷先マスタに差し替え。"
   },
+  "matching": {
+    "fields": [{"key": "ship_to", "company": true}, {"key": "producer", "company": false}],
+    "line_fields": []
+  },
   "analytics": {
     "dimensions": [
       {"key": "ship_to", "label": "出荷先"},

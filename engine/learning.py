@@ -168,3 +168,70 @@ def summary(cfg: dict) -> dict:
         "vocabulary": sum(len(v) for v in (store.get("vocabulary") or {}).values()),
         "updated_at": store.get("updated_at"),
     }
+
+
+# ── マスタ先読み（cold-start辞書）────────────────────────────────────────────────
+def candidates(cfg: dict, field_key: str) -> list[str]:
+    """名寄せ用の既知語彙（マスタseed＋学習で確定した値）。"""
+    return list((load(cfg).get("vocabulary") or {}).get(field_key, []))
+
+
+def seed_vocabulary(cfg: dict, mapping: dict[str, list[str]]) -> dict:
+    """マスタ/名簿の値を語彙として先読み登録する（最初から満タンでスタート）。
+
+    mapping = {フィールドキー: [値, ...]}。重複は除き、上限内でマージ。
+    返り値は追加件数。
+    """
+    store = load(cfg)
+    vocab = {k: list(v) for k, v in store.get("vocabulary", {}).items()}
+    added = 0
+    for key, values in mapping.items():
+        lst = vocab.setdefault(key, [])
+        for v in values:
+            v = ("" if v is None else str(v)).strip()
+            if v and v not in lst:
+                lst.append(v)
+                added += 1
+        vocab[key] = lst[-_MAX_VOCAB_PER_FIELD * 4:]  # マスタは多めに保持
+    store["vocabulary"] = vocab
+    save(cfg, store)
+    return {"added": added, "total_vocabulary": sum(len(v) for v in vocab.values())}
+
+
+def import_master_file(cfg: dict, path, field_map: dict[str, str]) -> dict:
+    """名簿/取引先リスト(CSV/Excel)を読み、field_map に従い語彙を先読み登録する。
+
+    field_map = {フィールドキー: 列見出し（または0始まりの列番号）}
+    """
+    import csv as _csv
+    from pathlib import Path as _Path
+
+    p = _Path(path)
+    rows: list[dict] = []
+    if p.suffix.lower() in (".xlsx", ".xlsm"):
+        from openpyxl import load_workbook
+        ws = load_workbook(p, data_only=True).worksheets[0]
+        it = ws.iter_rows(values_only=True)
+        header = [("" if c is None else str(c)).strip() for c in next(it, [])]
+        for r in it:
+            rows.append({header[i]: r[i] for i in range(len(header)) if i < len(r)})
+    else:
+        with open(p, encoding="utf-8-sig", newline="") as f:
+            rows = list(_csv.DictReader(f))
+
+    def _col(rec, col):
+        if isinstance(col, int):
+            vals = list(rec.values())
+            return vals[col] if col < len(vals) else None
+        return rec.get(col)
+
+    mapping: dict[str, list[str]] = {}
+    for key, col in field_map.items():
+        seen = []
+        for rec in rows:
+            v = _col(rec, col)
+            v = ("" if v is None else str(v)).strip()
+            if v and v not in seen:
+                seen.append(v)
+        mapping[key] = seen
+    return seed_vocabulary(cfg, mapping)

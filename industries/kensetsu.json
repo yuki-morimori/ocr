@@ -1,0 +1,89 @@
+{
+  "id": "kensetsu",
+  "display_name": "建設業（作業日報）",
+  "doc_label": "作業日報",
+  "context_declaration": "これは建設業の『作業日報』です。1現場・1日ぶんの記録で、元請・現場名・作業者と人工（にんく）が手書きされています。汚れ・崩し字・複写の薄字が多い前提で読みます。",
+  "glossary": [
+    {"term": "人工", "note": "にんく。作業者1人1日=1.0。半人工=0.5。請求・給与の基礎になる最重要数値。"},
+    {"term": "常用", "note": "じょうよう。人工単価×人数で請求する契約形態。"},
+    {"term": "手元", "note": "てもと。職人の補助作業者。"},
+    {"term": "出来高", "note": "できだか。仕事量に応じた請負。"},
+    {"term": "元請", "note": "もとうけ。上位の発注会社。請求先になる。〜建設/〜組/〜工業 など。"},
+    {"term": "屋号", "note": "やごう。個人事業の職人の通称（氏名の代わりに書かれることがある）。"},
+    {"term": "早出 / 残業", "note": "定時外の時間。人工とは別に時間数で記録。"}
+  ],
+  "header_fields": [
+    {"key": "date", "label": "作業日", "type": "date", "desc": "作業した日。和暦(R=令和)は西暦YYYY-MM-DDへ。"},
+    {"key": "prime_contractor", "label": "元請", "type": "text", "desc": "元請会社名（請求先）。〜建設/〜組/〜工業 等。崩し字でも丁寧に。"},
+    {"key": "site_name", "label": "現場", "type": "text", "desc": "現場名・工事名。"},
+    {"key": "work_description", "label": "作業内容", "type": "text", "desc": "当日の作業（例 解体/基礎/運搬手元）。不確かなら confidence に low。"}
+  ],
+  "line_items": {
+    "key": "workers",
+    "label": "作業者・人工",
+    "row_hint": "1人＝1行。縦横に並ぶ作業者欄を上から下・左から右に全員。取り消し線で消された人は除く。",
+    "columns": [
+      {"key": "name", "label": "氏名", "type": "text", "desc": "作業者氏名（手書きそのまま。姓のみ可。旧字・崩し字も丁寧に）。"},
+      {"key": "person_days", "label": "人工", "type": "number", "sum": true, "critical": true, "desc": "にんく。1日=1.0、半人工=0.5。読めなければ null（推測しない）。"},
+      {"key": "overtime_hours", "label": "残業(h)", "type": "number", "desc": "早出・残業の時間数(h)。人工とは別物。無ければ null。"}
+    ]
+  },
+  "suppression_rules": [
+    "人工・時間・金額は読めたものだけ入れる。かすれ・複写の薄字は推測せず null＋confidence low。",
+    "人工は 0.5 刻み（1.0/0.5/1.5…）。それ以外に読めたら誤読を疑い null か low。",
+    "氏名に取り消し線・×・二重線がはっきり引かれた人はその日欠勤。workers から除く（または除外と明示）。",
+    "汚い字・崩し字・続け字は『線』ではない。打ち消しの明確な線でなければ通常の記入として読む。"
+  ],
+  "form": {
+    "title": "作業日報・常用請求 素データ",
+    "subtitle": "（元請ごとに月末集計 → 常用請求書／職人の出面・給与へ）",
+    "summary_note": "人工の合計が常用請求と出面（でづら）の基礎。"
+  },
+  "billing": {
+    "party_field": "prime_contractor",
+    "party_label": "元請",
+    "mode": "manday",
+    "qty_field": "person_days",
+    "unit": "人工",
+    "currency": "円",
+    "tax_rate": 0.10,
+    "rate": 18000,
+    "note": "人工単価（円/人工）はサンプル。実運用では元請ごとの常用単価マスタに差し替え。"
+  },
+  "analytics": {
+    "dimensions": [
+      {"key": "prime_contractor", "label": "元請"},
+      {"key": "site_name", "label": "現場"}
+    ],
+    "measures": [
+      {"key": "person_days", "label": "人工", "unit": "人工", "source": "line", "agg": "sum"},
+      {"key": "overtime_hours", "label": "残業", "unit": "h", "source": "line", "agg": "sum"},
+      {"key": "_count", "label": "稼働日数", "agg": "count"}
+    ]
+  },
+  "payroll": {
+    "party_field": "prime_contractor",
+    "party_label": "元請",
+    "currency": "円",
+    "items": [
+      {"label": "出面（人工×単価）", "qty_field": "person_days", "qty_label": "人工", "unit": "人工", "rate": 18000}
+    ],
+    "note": "出面（でづら）の素データ。職人別の集計は確認シートで氏名を確定後に。単価はサンプル。"
+  },
+  "matching": {
+    "fields": [{"key": "prime_contractor", "company": true}],
+    "line_fields": [{"key": "name", "company": false}]
+  },
+  "mock": {
+    "date": "2026-06-15",
+    "prime_contractor": "丸北建設(株)",
+    "site_name": "東金第一現場",
+    "work_description": "基礎・運搬手元",
+    "workers": [
+      {"name": "濱崎", "person_days": 1.0, "overtime_hours": 2.0},
+      {"name": "阿久澤", "person_days": 1.0, "overtime_hours": null},
+      {"name": "佐野", "person_days": 0.5, "overtime_hours": null}
+    ],
+    "unreadable_fields": []
+  }
+}
