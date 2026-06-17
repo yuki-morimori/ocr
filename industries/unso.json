@@ -18,9 +18,9 @@
     {"key": "driver", "label": "乗務員", "type": "text", "desc": "運転者氏名（手書きそのまま。姓のみ可）。"},
     {"key": "vehicle_no", "label": "車番", "type": "text", "desc": "車両番号・号車。"},
     {"key": "client", "label": "取引先 / 荷主", "type": "text", "desc": "運賃の請求先。記載が無ければ null。"},
-    {"key": "start_odo", "label": "出庫メーター(km)", "type": "number", "desc": "出発時の走行距離計。数値のみ。"},
-    {"key": "end_odo", "label": "帰庫メーター(km)", "type": "number", "desc": "帰着時の走行距離計。数値のみ。"},
-    {"key": "total_distance", "label": "走行距離(km)", "type": "number", "desc": "当日走行距離。記載があればそのまま。無く両メーターがあれば差で算出可。"}
+    {"key": "start_odo", "label": "出庫メーター(km)", "type": "number", "critical": true, "desc": "出発時の走行距離計。数値のみ。"},
+    {"key": "end_odo", "label": "帰庫メーター(km)", "type": "number", "critical": true, "desc": "帰着時の走行距離計。数値のみ。"},
+    {"key": "total_distance", "label": "走行距離(km)", "type": "number", "critical": true, "desc": "当日走行距離。記載があればそのまま。無く両メーターがあれば差で算出可。"}
   ],
   "line_items": {
     "key": "trips",
@@ -32,7 +32,7 @@
       {"key": "cargo", "label": "品名 / 荷", "type": "text", "desc": "運んだ荷物。記載が無ければ null。"},
       {"key": "charter", "label": "自社/傭車", "type": "text", "desc": "『傭車』『外注』の記載があれば傭車、無ければ自社。曖昧なら null。"},
       {"key": "expense_type", "label": "立替費目", "type": "text", "desc": "高速・駐車・フェリー等。立替が無ければ null。"},
-      {"key": "expense_amount", "label": "立替金額(円)", "type": "number", "sum": true, "desc": "立替経費の金額。数値のみ。無ければ null。"}
+      {"key": "expense_amount", "label": "立替金額(円)", "type": "number", "sum": true, "critical": true, "desc": "立替経費の金額。数値のみ。無ければ null。"}
     ]
   },
   "suppression_rules": [
@@ -47,6 +47,7 @@
     "summary_note": "同じ日報から運賃請求とドライバー給与の素データを両方出せる。"
   },
   "mock": {
+    "low_first_pass": ["expense_amount"],
     "date": "2026-06-15",
     "driver": "濱崎",
     "vehicle_no": "習志野130あ8842",

@@ -9,7 +9,33 @@
 
 {% if data._error %}<p class="error">{{ data._error }}</p>{% endif %}
 
-{% if data.unreadable_fields and data.unreadable_fields|length %}
+{% set esc = data._escalation %}
+{% if esc %}
+<div class="esc">
+  <div class="esc-ladder">
+    {% for step in esc.steps %}
+      <span class="esc-step {{ 'bad' if step.problems else 'ok' }}">
+        {{ step.model }}{% if step.problems %} ⚠{% else %} ✓{% endif %}
+      </span>
+      {% if not loop.last %}<span class="esc-arrow">→</span>{% endif %}
+    {% endfor %}
+    {% if esc.human_review_required %}
+      <span class="esc-arrow">→</span><span class="esc-step human">要人間確認 👁</span>
+    {% endif %}
+  </div>
+  <div class="esc-meta">
+    {% if esc.escalated %}低自信度のため自動エスカレーション。{% else %}最初のモデルで確定。{% endif %}
+    確定: <b>{{ esc.final_model }}</b> ／ 概算コスト: <b>¥{{ '%.2f'|format(esc.total_cost_yen) }}</b>/枚
+    {% if esc.mock %}<span class="esc-mocknote">（モックの擬似トレース）</span>{% endif %}
+  </div>
+</div>
+{% endif %}
+
+{% if data.needs_human_review and data.needs_human_review|length %}
+<p class="warn">👁 上位モデルでも確定できず<b>要人間確認</b>（推測で埋めていません）:
+  {% for k in data.needs_human_review %}<code>{{ k }}</code>{% endfor %}
+</p>
+{% elif data.unreadable_fields and data.unreadable_fields|length %}
 <p class="warn">⚠ 読み取れず空にした項目（推測していません）:
   {% for k in data.unreadable_fields %}<code>{{ k }}</code>{% endfor %}
 </p>

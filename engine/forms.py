@@ -38,18 +38,30 @@ def _sum_column(rows: list[dict], key: str):
     return int(total) if total == int(total) else total
 
 
+def _flag_class(key: str, review: set, low: set) -> str:
+    """項目キーが要人間確認/低自信度なら、ハイライト用のCSSクラスを返す。"""
+    if key in review:
+        return " review"
+    if key in low:
+        return " low-conf"
+    return ""
+
+
 def render_form(cfg: dict, data: dict) -> str:
     """業種設定＋構造化データから帳票HTMLを生成する。"""
     form = cfg.get("form", {})
     title = form.get("title", cfg["display_name"])
     subtitle = form.get("subtitle", "")
+    review = set(data.get("needs_human_review") or [])
+    low = {k for k, v in (data.get("confidence") or {}).items() if str(v).lower() == "low"}
 
     # ヘッダ項目（2列のラベル/値テーブル）
     header_rows = ""
     for f in cfg["header_fields"]:
         val = _fmt(data.get(f["key"]), f.get("type", "text"))
+        cls = _flag_class(f["key"], review, low)
         header_rows += (
-            f'<tr><th>{escape(f["label"])}</th><td>{val}</td></tr>'
+            f'<tr><th>{escape(f["label"])}</th><td class="kvval{cls}">{val}</td></tr>'
         )
 
     # 明細テーブル
@@ -60,7 +72,8 @@ def render_form(cfg: dict, data: dict) -> str:
     rows = data.get(li["key"]) or []
     for r in rows:
         cells = "".join(
-            f'<td class="{"num" if c.get("type")=="number" else ""}">'
+            f'<td class="{"num " if c.get("type")=="number" else ""}'
+            f'{_flag_class(c["key"], review, low).strip()}">'
             f'{_fmt(r.get(c["key"]), c.get("type","text"))}</td>'
             for c in cols
         )

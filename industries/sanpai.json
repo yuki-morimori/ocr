@@ -29,9 +29,9 @@
     "columns": [
       {"key": "item", "label": "品目", "type": "text", "desc": "廃棄物の種類。略記は用語辞書で正式名に。"},
       {"key": "category", "label": "区分", "type": "text", "desc": "『単品』か『混合』か。判別できなければ null（推測しない）。"},
-      {"key": "gross", "label": "総重量(kg)", "type": "number", "desc": "グロス重量。数値のみ。"},
-      {"key": "tare", "label": "風袋(kg)", "type": "number", "desc": "空車重量。数値のみ。"},
-      {"key": "net", "label": "正味重量(kg)", "type": "number", "sum": true, "desc": "ネット重量。記載があればそのまま。無く総重量と風袋があれば差で算出可。両方無ければ null。"}
+      {"key": "gross", "label": "総重量(kg)", "type": "number", "critical": true, "desc": "グロス重量。数値のみ。"},
+      {"key": "tare", "label": "風袋(kg)", "type": "number", "critical": true, "desc": "空車重量。数値のみ。"},
+      {"key": "net", "label": "正味重量(kg)", "type": "number", "sum": true, "critical": true, "desc": "ネット重量。記載があればそのまま。無く総重量と風袋があれば差で算出可。両方無ければ null。"}
     ]
   },
   "suppression_rules": [
